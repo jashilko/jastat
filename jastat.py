@@ -8,6 +8,7 @@ import os.path
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+import time
 
 
 class OneDay:
@@ -15,6 +16,7 @@ class OneDay:
         descr = ""
         date = None
         caption = None
+        calend = None
 
 
 # apihelper.proxy = {'https': 'socks5://2150772:WMybmRSO@orbtl.s5.opennetwork.cc:999'}
@@ -28,14 +30,8 @@ od.caption = 'Health_Score'
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
-def calend_add():
-    """Shows basic usage of the Google Calendar API.
-    Prints the start and name of the next 10 events on the user's calendar.
-    """
+def calend_connect():
     creds = None
-    # The file token.pickle stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
@@ -52,7 +48,10 @@ def calend_add():
             pickle.dump(creds, token)
 
     service = build('calendar', 'v3', credentials=creds)
+    od.calend = service
 
+
+def event_add():
     # Call the Calendar API
     now = datetime.datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC time
 
@@ -76,7 +75,28 @@ def calend_add():
         },
     }
 
-    event = service.events().insert(calendarId='primary', body=event).execute()
+    event = od.calend.events().insert(calendarId='f2c4fjmov87b3vgtvqbaf0aabo@group.calendar.google.com',
+                                      body=event).execute()
+
+
+def delDay():
+    now1 = datetime.datetime.now()
+    start_date = datetime.datetime(now1.year, now1.month, now1.day, 00, 00, 00, 0).isoformat() + 'Z'
+    now = datetime.datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC timedate.today
+
+    eventsResult = od.calend.events().list(
+        calendarId='f2c4fjmov87b3vgtvqbaf0aabo@group.calendar.google.com', timeMin=start_date, timeMax=now,
+        maxResults=5, singleEvents=True,
+        orderBy='startTime').execute()
+    events = eventsResult.get('items', [])
+
+    if not events:
+        print('нет событий на ближайшие сутки')
+    else:
+        msg = '<b>События на ближайшие сутки:</b>\n'
+        for event in events:
+            od.calend.events().delete(calendarId='f2c4fjmov87b3vgtvqbaf0aabo@group.calendar.google.com',
+                                      eventId=event['id']).execute()
 
 
 # Handle '/start'
@@ -134,8 +154,10 @@ def get_smoking(message):
     od.descr = od.descr + 'Курение:' + message.text + '\n'
     print(od.descr)
     markup = types.ReplyKeyboardRemove()
-    bot.send_message(message.from_user.id, 'Ясно', reply_markup=markup)
-    calend_add()
+    bot.send_message(message.from_user.id, 'Ясно. Вот твой день: ' + '\n' + od.descr, reply_markup=markup)
+    calend_connect()
+    delDay()
+    event_add()
 
 
 @bot.message_handler(content_types=['text'])
